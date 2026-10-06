@@ -1,0 +1,6 @@
+WIFI_SSID=cambia_questo
+WIFI_PASSWORD=cambia_questo
+SERVER_URL=http://[IP_ADDRESS]:5040/ingest
+UPDATE_URL=http://[IP_ADDRESS]:5040/update/check
+INGEST_URL=http://[IP_ADDRESS]:5040/ingest
+NTP_SERVER=pool.ntp.org

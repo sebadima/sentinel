@@ -1,0 +1,31 @@
+# PlatformIO
+.pio/
+.pio-build/
+.cache/
+
+# Secrets (CRITICO!)
+.env
+secrets.h
+src/secrets.h
+
+# Build outputs
+*.bin
+*.elf
+*.hex
+firmware_builds/
+
+# Temporary files
+gemini.txt
+gemini.py
+__pycache__/
+*.pyc
+*.log
+
+# Editors
+.vscode/
+.zed/
+.DS_Store
+.idea/
+
+# OS
+Thumbs.db
