@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <title>SENTINEL DASHBOARD</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <link rel="icon" type="image/svg+xml" href="https://www.robotdazero.it/favicon.svg">
+    <style>
+        body { background: #000; color: #0f0; font-family: 'Courier New', monospace; padding: 10px; margin: 0; }
+        .container { max-width: 1300px; margin: 0 auto; }
+        .header { border-bottom: 2px solid #0f0; padding-bottom: 10px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
+        #version-badge { background: #0f0; color: #000; padding: 4px 12px; font-weight: bold; font-size: 1.3em; }
+        .stat-card { border: 1px solid #0f0; padding: 15px; background: #050505; margin-bottom: 10px; flex: 1; min-width: 180px; transition: all 0.2s; }
+        .stat-value { font-size: 2em; font-weight: bold; }
+        .chart-wrapper { background: #050505; border: 1px solid #222; margin-bottom: 12px; position: relative; }
+        .chart-upper { height: 28vh; }
+        .chart-lower { height: 35vh; }
+
+        #fault-banner { background: #110000; border: 2px dashed #f00; color: #f00; font-weight: bold; padding: 12px; text-align: left; margin-bottom: 15px; display: none; line-height: 1.5; }
+        .err-value { color: #f00 !important; background: #330000; animation: blink 1s infinite step-end; }
+        @keyframes blink { 50% { opacity: 0; } }
+
+        button { background: transparent; border: 1px solid #0f0; color: #0f0; padding: 12px; cursor: pointer; font-family: inherit; flex: 1; }
+        button:hover { background: #0f0; color: #000; }
+
+        .header-btn { padding: 6px 14px; font-weight: bold; font-size: 0.85em; flex: initial; }
+
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 9999;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-box {
+            background: #050505;
+            border: 2px solid #0f0;
+            width: 80%;
+            max-width: 800px;
+            max-height: 80vh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 0 15px rgba(0, 255, 0, 0.2);
+        }
+        .modal-header {
+            border-bottom: 1px solid #0f0;
+            padding: 10px 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #001100;
+        }
+        .modal-body {
+            padding: 15px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            font-size: 0.95em;
+            line-height: 1.4;
+            color: #0f0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div id="fault-banner">
+            <div style="font-size: 1.2em; border-bottom: 1px solid #f00; padding-bottom: 4px; margin-bottom: 8px;">!!! HARDWARE FAULT DETECTED !!!</div>
+            <div id="fault-banner-text"></div>
+        </div>
+
+        <div class="header">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <div id="version-badge">V0</div>
+                <h2 style="margin:0; padding-left:10px;">[ SENTINEL 3.9 ]</h2>
+                <button class="header-btn" onclick="runAnalysis()">ANALISI</button>
+                <button class="header-btn" onclick="openModal()">RESULTS</button>
+            </div>
+            <div id="sync-status">LAST_SYNC: ---</div>
+        </div>
+
+        <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 15px;">
+            <div class="stat-card" id="card-v0">
+                <div style="font-size:0.85em;font-weight: 700;">PT1000 MAX31865</div>
+                <div class="stat-value"><span id="val-v0">0.000</span> °C</div>
+            </div>
+            <div class="stat-card" id="card-v1" style="border-color: #00bfff; color: #00bfff;">
+                <div style="font-size:0.85em;font-weight: 700;">1-WIRE DS18B20</div>
+                <div class="stat-value"><span id="val-v1">0.000</span> °C</div>
+            </div>
+            <div class="stat-card" id="card-co2" style="border-color: #00ffaa; color: #00ffaa;">
+                <div style="font-size:0.85em;font-weight: 700;">CO2 NODE (SCD30)</div>
+                <div class="stat-value"><span id="val-co2">---</span> <span style="font-size:0.5em;">PPM</span></div>
+            </div>
+            <div class="stat-card" id="card-hum" style="border-color: #ffaa00; color: #ffaa00;">
+                <div style="font-size:0.85em;font-weight: 700;">UMIDITA SCD30</div>
+                <div class="stat-value"><span id="val-hum">---</span> %</div>
+            </div>
+            <div class="stat-card" style="border-color: #ffffff; color: #ffffff;">
+                <div style="font-size:0.85em;font-weight: 700;">TEMPERATURA ESP32</div>
+                <div class="stat-value"><span id="val-dhtt">0.0</span> °C</div>
+            </div>
+        </div>
+
+        <div style="font-size:0.9em; color:#0f0; margin-bottom:6px;">> MONITOR TEMPERATURA SONDE (-10 / 60 °C)</div>
+        <div class="chart-wrapper chart-upper"><canvas id="c1"></canvas></div>
+
+        <div style="font-size:0.9em; color:#0f0; margin: 15px 0 6px 0;">> MONITOR TENSIONE PIN ADS1115 (CH0 - CH3)</div>
+        <div class="chart-wrapper chart-lower"><canvas id="c2"></canvas></div>
+
+        <div style="display: flex; gap: 10px; margin-top: 20px;">
+            <button onclick="location.href='/export/24h'">📥 DUMP 24H</button>
+            <button onclick="location.href='/export/week'">📥 DUMP WEEK</button>
+            <button onclick="location.href='/export/month'">📥 DUMP MONTH</button>
+        </div>
+    </div>
+
+    <div id="analysis-modal" class="modal-overlay">
+        <div class="modal-box">
+            <div class="modal-header">
+                <span style="font-weight: bold;">[ REPORT ANALISI FERMENTAZIONE LLM ]</span>
+                <button style="flex: initial; padding: 2px 8px;" onclick="closeModal()">X</button>
+            </div>
+            <div id="analysis-text" class="modal-body">Nessuna analisi generata. Premi 'ANALISI' per avviare il calcolo.</div>
+        </div>
+    </div>
+
+    <script>
+        let chartV01, chartADS;
+
+        function openModal() {
+            document.getElementById('analysis-modal').style.display = 'flex';
+        }
+
+        function closeModal() {
+            document.getElementById('analysis-modal').style.display = 'none';
+        }
+
+        async function runAnalysis() {
+            const outputEl = document.getElementById('analysis-text');
+            outputEl.innerText = "> INIZIALIZZAZIONE INFERENZA SCALEWAY (LLAMA 3.1 70B)...\n> ESTRAZIONE DENSITA E SERIE TEMPORALE DAL DB IN CORSO...";
+            openModal();
+
+            try {
+                const res = await fetch('/api/analyze');
+                const data = await res.json();
+                if (data.status === "OK") {
+                    outputEl.innerText = data.analysis;
+                } else {
+                    outputEl.innerText = "ERRORE: " + (data.msg || "Impossibile completare l'analisi.");
+                }
+            } catch(e) {
+                outputEl.innerText = "ERRORE CONNESSIONE API: " + e.message;
+            }
+        }
+
+        function formatItalianTime(timestamp) {
+            if (!timestamp) return "---";
+            const date = new Date(timestamp);
+            return date.toLocaleString('it-IT', {
+                timeZone: 'Europe/Rome',
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+        }
+
+        function parseSensorValue(val, spanId, cardId) {
+            const spanEl = document.getElementById(spanId);
+            const cardEl = document.getElementById(cardId);
+
+            if (val === undefined || val === null || val <= -99.0) {
+                spanEl.innerText = "ERR";
+                cardEl.classList.add('err-value');
+                return null;
+            } else {
+                spanEl.innerText = val.toFixed(3);
+                cardEl.classList.remove('err-value');
+                return val;
+            }
+        }
+
+        function updateUI(data) {
+            if (!data || data.length === 0) return;
+
+            const centralinaRecord = data.find(r => r.voltage_0 !== null);
+
+            if (centralinaRecord) {
+                const formattedTimestamp = formatItalianTime(centralinaRecord.timestamp);
+                document.getElementById('sync-status').innerText = "SYNC: " + formattedTimestamp;
+                document.getElementById('version-badge').innerText = "V" + (centralinaRecord.fw_version || "?");
+
+                const faultBanner = document.getElementById('fault-banner');
+                const faultBannerText = document.getElementById('fault-banner-text');
+
+                if (centralinaRecord.status > 0) {
+                    let errors = [];
+                    errors.push(`[STATUS DECODE RAW: ${centralinaRecord.status} (0x${centralinaRecord.status.toString(16)})]`);
+
+                    if (centralinaRecord.status & 0x01) {
+                        errors.push("-> 0x01: RTC DS3231 DRIFT THRESHOLD SUPERATO");
+                    }
+                    if (centralinaRecord.status & 0x04) {
+                        let subFaults = [];
+                        if (centralinaRecord.voltage_0 <= -99.0) subFaults.push("PT1000 / MAX31865 (SPI)");
+                        if (centralinaRecord.voltage_1 <= -99.0) subFaults.push("1-WIRE BUS 33 (DS18B20)");
+                        if (centralinaRecord.ads_ch1 < 0.001 || centralinaRecord.ads_ch2 < 0.001 || centralinaRecord.ads_ch3 < 0.001) subFaults.push("ADS1115 (I2C)");
+
+                        if (subFaults.length > 0) {
+                            errors.push(`-> 0x04: FAULT HARDWARE SU: ${subFaults.join(" | ")}`);
+                        } else {
+                            errors.push("-> 0x04: HARDWARE SENSOR FAULT (INTERFACCIA GENERICA DOWN)");
+                        }
+                    }
+                    if (centralinaRecord.status & 0x08) {
+                        errors.push("-> 0x08: RTC EPOCH CORRUPTION / BATTERIA SCARICA");
+                    }
+
+                    faultBannerText.innerHTML = errors.join("<br>");
+                    faultBanner.style.display = 'block';
+                } else {
+                    faultBanner.style.display = 'none';
+                    faultBannerText.innerHTML = "";
+                }
+
+                parseSensorValue(centralinaRecord.voltage_0, 'val-v0', 'card-v0');
+                parseSensorValue(centralinaRecord.voltage_1, 'val-v1', 'card-v1');
+
+                if (centralinaRecord.rtc_temp !== undefined && centralinaRecord.rtc_temp !== null) {
+                    document.getElementById('val-dhtt').innerText = centralinaRecord.rtc_temp.toFixed(1);
+                } else {
+                    document.getElementById('val-dhtt').innerText = "N/A";
+                }
+            }
+        }
+
+        async function fetchCO2() {
+            try {
+                const res = await fetch('/api/co2/latest');
+                if (!res.ok) return;
+                const co2Data = await res.json();
+
+                if (co2Data && co2Data.updated_at && co2Data.co2 > 0) {
+                    document.getElementById('val-co2').innerText = Math.round(co2Data.co2);
+                    document.getElementById('val-hum').innerText = co2Data.hum.toFixed(1);
+                } else {
+                    document.getElementById('val-co2').innerText = "---";
+                    document.getElementById('val-hum').innerText = "---";
+                }
+            } catch (e) {
+                console.error("[FETCH_ERR] Impossibile recuperare CO2:", e);
+            }
+        }
+
+        async function refresh() {
+            try {
+                const res = await fetch('/data');
+                const data = await res.json();
+
+                if (data.length > 0) {
+                    const recentData = data.slice(0, 80);
+                    const labels = recentData.map(r => r.timestamp).reverse();
+
+                    chartV01.data.labels = labels;
+                    chartV01.data.datasets[0].data = recentData.map(r => r.voltage_0 <= -99.0 ? null : r.voltage_0).reverse();
+                    chartV01.data.datasets[1].data = recentData.map(r => r.voltage_1 <= -99.0 ? null : r.voltage_1).reverse();
+                    chartV01.update('none');
+
+                    chartADS.data.labels = labels;
+                    chartADS.data.datasets[0].data = recentData.map(r => r.ads_ch0).reverse();
+                    chartADS.data.datasets[1].data = recentData.map(r => r.ads_ch1).reverse();
+                    chartADS.data.datasets[2].data = recentData.map(r => r.ads_ch2).reverse();
+                    chartADS.data.datasets[3].data = recentData.map(r => r.ads_ch3).reverse();
+                    chartADS.update('none');
+
+                    updateUI(data);
+                }
+
+                await fetchCO2();
+
+            } catch(e) {
+                console.error("[REFRESH_ERR] Errore aggiornamento dashboard:", e);
+            }
+        }
+
+        chartV01 = new Chart(document.getElementById('c1'), {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [
+                    { label: 'PT1000', borderColor: '#0f0', backgroundColor: 'rgba(0, 255, 0, 0.08)', borderWidth: 2.8, spanGaps: false, tension: 0.2, pointRadius: 0, pointHoverRadius: 3 },
+                    { label: 'DS18B20', borderColor: '#00bfff', backgroundColor: 'rgba(0, 191, 255, 0.08)', borderWidth: 2.8, spanGaps: false, tension: 0.2, pointRadius: 0, pointHoverRadius: 3 }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: { duration: 0 },
+                interaction: { intersect: false, mode: 'index' },
+                plugins: {
+                    legend: { display: true, position: 'top', labels: { color: '#0f0', font: { size: 13 } }},
+                    tooltip: { mode: 'index', intersect: false }
+                },
+                scales: {
+                    x: { ticks: { display: false, color: '#0f0' }, grid: { color: '#111' }},
+                    y: { min: -10, max: 60, grid: { color: '#222' }, ticks: { color: '#0f0', stepSize: 10 } }
+                },
+                elements: { line: { borderJoinStyle: 'round' }}
+            }
+        });
+
+        chartADS = new Chart(document.getElementById('c2'), {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [
+                    { label: 'ADS CH0', borderColor: '#ffff00', backgroundColor: 'rgba(255, 255, 0, 0.04)', borderWidth: 2.2, tension: 0.2, pointRadius: 0, pointHoverRadius: 3 },
+                    { label: 'ADS CH1', borderColor: '#00ffcc', backgroundColor: 'rgba(0, 255, 204, 0.04)', borderWidth: 2.2, tension: 0.2, pointRadius: 0, pointHoverRadius: 3 },
+                    { label: 'ADS CH2', borderColor: '#ffaa00', backgroundColor: 'rgba(255, 170, 0, 0.04)', borderWidth: 2.2, tension: 0.2, pointRadius: 0, pointHoverRadius: 3 },
+                    { label: 'ADS CH3', borderColor: '#ff00ff', backgroundColor: 'rgba(255, 0, 255, 0.04)', borderWidth: 2.2, tension: 0.2, pointRadius: 0, pointHoverRadius: 3 }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: { duration: 0 },
+                interaction: { intersect: false, mode: 'index' },
+                plugins: {
+                    legend: { display: true, position: 'top', labels: { color: '#0f0', font: { size: 13 } }},
+                    tooltip: { mode: 'index', intersect: false }
+                },
+                scales: {
+                    x: { ticks: { display: false, color: '#0f0' }, grid: { color: '#111' }},
+                    y: { grid: { color: '#222' }, ticks: { color: '#0f0' } }
+                },
+                elements: { line: { borderJoinStyle: 'round' }}
+            }
+        });
+
+        refresh();
+        setInterval(refresh, 4000);
+    </script>
+</body>
+</html>

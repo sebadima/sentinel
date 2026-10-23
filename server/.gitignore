@@ -1,0 +1,50 @@
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Logs
+*.log
+
+# Local databases and temporary SQLite files
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# Local simulation state
+sim_state.json
+
+# Firmware build artifacts
+firmware_builds/
+
+# Test and coverage artifacts
+.coverage
+htmlcov/
+
+# Editor and operating system files
+.vscode/
+.idea/
+*~
+.DS_Store
+
+# Python virtualenv in project root
+/bin/
+/include/
+/lib/
+/lib64
+/pyvenv.cfg

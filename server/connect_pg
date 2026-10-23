@@ -1,0 +1,9 @@
+#!/bin/bash
+set -a
+source .env
+set +a
+
+export PGPASSWORD
+PGPASSWORD=$(python3 -c 'from urllib.parse import urlparse, unquote; import os; print(unquote(urlparse(os.environ["DATABASE_URL"]).password or ""))')
+
+psql -h 127.0.0.1 -U app -d haccp_app
